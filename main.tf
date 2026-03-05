@@ -11,6 +11,6 @@ resource "google_storage_bucket" "mybucket" {
 
   labels = {
     environment = "dev"
-    managed_by  = "terraform"
+    managed_by  = "terraforms"
   }
 }

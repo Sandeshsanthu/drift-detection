@@ -94,6 +94,26 @@ jobs:
           terraform show tfplan -no-color | tail -80 >> drift_report.md
           echo '```' >> drift_report.md
 
+      - name: Add run summary (drift)
+        if: steps.drift.outputs.drift_detected == 'true'
+        run: |
+          {
+            echo "## Drift detected (${ENVIRONMENT})"
+            echo ""
+            echo "- Repo: ${{ github.repository }}"
+            echo "- Commit: ${{ github.sha }}"
+            echo "- Run: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+            echo ""
+            echo "See drift_report.md artifact and the drift issue."
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload drift report artifact
+        if: steps.drift.outputs.drift_detected == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: drift-report-${{ env.ENVIRONMENT }}
+          path: drift_report.md
+
       - name: Create/Update GitHub Issue for Drift
         if: steps.drift.outputs.drift_detected == 'true'
         uses: actions/github-script@v7
@@ -131,11 +151,16 @@ jobs:
               });
             }
 
-      - name: Send Webhook Notification (drift)
+      - name: Send Webhook Notification (drift) - optional
         if: steps.drift.outputs.drift_detected == 'true'
         env:
-          ENVIRONMENT: ${{ env.ENVIRONMENT }}
+          DRIFT_WEBHOOK_URL: ${{ secrets.DRIFT_WEBHOOK_URL }}
         run: |
+          if [ -z "$DRIFT_WEBHOOK_URL" ]; then
+            echo "DRIFT_WEBHOOK_URL not set; skipping webhook."
+            exit 0
+          fi
+
           curl -X POST -H "Content-Type: application/json" \
           -d "{
             \"event\": \"drift_detected\",
@@ -144,7 +169,7 @@ jobs:
             \"commit\": \"${{ github.sha }}\",
             \"run_url\": \"${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}\",
             \"message\": \"Infrastructure drift was detected in ${ENVIRONMENT}. A GitHub issue has been created or updated.\"
-          }" '${{ secrets.DRIFT_WEBHOOK_URL }}'
+          }" "$DRIFT_WEBHOOK_URL"
 
       - name: Fail workflow to block downstream apply
         if: steps.drift.outputs.drift_detected == 'true'

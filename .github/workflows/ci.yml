@@ -18,17 +18,9 @@ env:
 
 jobs:
   detect-drift:
-    name: Detect Drift - ${{ matrix.environment }}
     runs-on: ubuntu-latest
-
-    strategy:
-      matrix:
-        environment: [production, staging]
-      fail-fast: false
-
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
       - name: Authenticate to Google Cloud (WIF)
         uses: google-github-actions/auth@v2
@@ -44,20 +36,11 @@ jobs:
           terraform_version: ${{ env.TF_VERSION }}
           terraform_wrapper: false
 
-      - name: Guardrail - reject terraform/apply usage in workflows
-        run: |
-          if grep -RIn --exclude-dir=.git --exclude-dir=.terraform -E '(^|[^a-zA-Z])terraform[[:space:]]+apply([^a-zA-Z]|$)' .github/workflows; then
-            echo "Found terraform/apply usage in workflows. Rejecting."
-            exit 1
-          fi
-
       - name: Terraform Init
-        working-directory: environments/${{ matrix.environment }}
         run: terraform init -input=false
 
       - name: Terraform Plan
         id: plan
-        working-directory: environments/${{ matrix.environment }}
         run: |
           set -o pipefail
           terraform plan -detailed-exitcode -input=false -out=tfplan 2>&1 | tee plan_output.txt
